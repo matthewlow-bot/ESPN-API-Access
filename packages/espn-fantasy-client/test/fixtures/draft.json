@@ -1,0 +1,39 @@
+{
+  "draftDetail": {
+    "drafted": true,
+    "inProgress": false,
+    "picks": [
+      {
+        "overallPickNumber": 3,
+        "playerId": 4241457,
+        "teamId": 2,
+        "bidAmount": 55,
+        "nominatingTeamId": 4,
+        "autoDraftTypeId": 0,
+        "reservedForKeeper": false
+      },
+      {
+        "overallPickNumber": 1,
+        "playerId": 3139477,
+        "teamId": 1,
+        "bidAmount": 42,
+        "nominatingTeamId": 1,
+        "autoDraftTypeId": 2,
+        "reservedForKeeper": false
+      },
+      {
+        "overallPickNumber": 2,
+        "playerId": 55555,
+        "teamId": 3,
+        "bidAmount": 30,
+        "reservedForKeeper": true
+      },
+      {
+        "overallPickNumber": 4,
+        "playerId": 0,
+        "teamId": 5,
+        "bidAmount": 0
+      }
+    ]
+  }
+}

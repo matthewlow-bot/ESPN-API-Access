@@ -1,0 +1,22 @@
+{
+  "schedule": [
+    {
+      "matchupPeriodId": 1,
+      "winner": "HOME",
+      "home": { "teamId": 1, "totalPoints": 120.5, "totalProjectedPointsLive": 118.0 },
+      "away": { "teamId": 2, "totalPoints": 99.2 }
+    },
+    {
+      "matchupPeriodId": 1,
+      "winner": "UNDECIDED",
+      "home": { "teamId": 3, "totalPoints": 0 },
+      "away": null
+    },
+    {
+      "matchupPeriodId": 2,
+      "winner": "AWAY",
+      "home": { "teamId": 1, "totalPoints": 80 },
+      "away": { "teamId": 3, "totalPoints": 101 }
+    }
+  ]
+}

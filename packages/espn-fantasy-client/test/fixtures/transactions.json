@@ -1,0 +1,31 @@
+{
+  "transactions": [
+    {
+      "id": "tx-1",
+      "type": "WAIVER",
+      "teamId": 1,
+      "status": "EXECUTED",
+      "scoringPeriodId": 3,
+      "items": [
+        { "playerId": 111, "type": "ADD", "toTeamId": 1 },
+        { "playerId": 222, "type": "DROP", "fromTeamId": 1 }
+      ]
+    },
+    {
+      "id": "tx-2",
+      "type": "TRADE_ACCEPTED",
+      "teamId": 2,
+      "status": "EXECUTED",
+      "items": [
+        { "playerId": 333, "type": "TRADE", "fromTeamId": 2, "toTeamId": 3 }
+      ]
+    },
+    {
+      "id": "tx-3",
+      "type": "FREEAGENT",
+      "teamId": 1,
+      "status": "EXECUTED",
+      "items": [{ "playerId": 444, "type": "ADD", "toTeamId": 1 }]
+    }
+  ]
+}

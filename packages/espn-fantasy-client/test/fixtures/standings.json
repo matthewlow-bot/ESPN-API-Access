@@ -1,0 +1,14 @@
+{
+  "teams": [
+    {
+      "id": 1,
+      "rankCalculatedFinal": 1,
+      "record": { "overall": { "wins": 10, "losses": 3, "ties": 0, "pointsFor": 1500.5, "pointsAgainst": 1200.2 } }
+    },
+    {
+      "id": 2,
+      "playoffSeed": 2,
+      "record": { "overall": { "wins": 8, "losses": 5, "ties": 1, "pointsFor": 1400.1, "pointsAgainst": 1350.9 } }
+    }
+  ]
+}

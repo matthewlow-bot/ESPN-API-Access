@@ -1,0 +1,8 @@
+{
+  "teams": [
+    { "id": 1, "name": "The Vampires", "abbrev": "VAMP", "logo": "http://x/logo.png", "owners": ["{OWNER-1}"] },
+    { "id": 2, "location": "Night", "nickname": "Crawlers", "abbrev": "NC" },
+    { "id": 3, "abbrev": "ABC" },
+    { "id": 4 }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "teams": [
+    {
+      "id": 1,
+      "roster": {
+        "entries": [
+          {
+            "playerId": 3139477,
+            "lineupSlotId": 0,
+            "playerPoolEntry": {
+              "player": { "id": 3139477, "fullName": "Patrick Mahomes", "defaultPositionId": 1, "proTeamId": 12 }
+            }
+          },
+          {
+            "playerId": 4241457,
+            "lineupSlotId": 2,
+            "playerPoolEntry": {
+              "player": { "id": 4241457, "fullName": "Bijan Robinson", "defaultPositionId": 2, "proTeamId": 1 }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
