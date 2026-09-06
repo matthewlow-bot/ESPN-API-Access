@@ -18,6 +18,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "tsc -p tsconfig.json",
+    "test": "node --test",
     "start": "node dist/index.js"
   },
   "dependencies": {

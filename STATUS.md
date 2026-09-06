@@ -14,8 +14,8 @@ team-manager app.
 | `packages/espn-fantasy-client` (library) | ✅ built, zero runtime deps, **validated against the live league** |
 | `packages/espn-mcp-server` (stdio MCP wrapper, 12 tools) | ✅ built, smoke-tested |
 | Team-manager app | ⬜ not started (its own spec, TBD) |
-| OpenClaw wiring | ⬜ not done — recipe ready in `docs/espn-fantasy-client-spec.md` §3.4 |
-| Tests | ✅ 25/25 passing (offline, fixture-driven) |
+| OpenClaw wiring | ✅ **live** — registered on the `clawbert` gateway, all 12 tools probing, `espn_check_connection` returns the league. See `OPENCLAW.md`. |
+| Tests | ✅ 34/34 passing (25 library + 9 MCP creds), offline |
 
 ## Architecture
 
