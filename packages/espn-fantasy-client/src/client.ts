@@ -9,6 +9,7 @@
 
 import { Transport } from "./transport.js";
 import {
+  currentMatchupPeriod,
   mapDraft,
   mapLeagueIdentity,
   mapMatchups,
@@ -122,9 +123,10 @@ export class EspnFantasyClient {
   /** kona_player_info + filterIds — named info for specific player ids. */
   async getPlayersByIds(ids: number[], opts?: ReadOptions): Promise<Player[]> {
     if (ids.length === 0) return [];
-    const filter = {
-      players: { filterIds: { value: ids }, limit: ids.length, offset: 0 },
-    };
+    // ESPN rejects a filter `limit` unless a sort is present too
+    // ("Limit request must be accompanied by a sort"), so reuse the shared
+    // builder, which always sets one. (Verified live 2026-09-05.)
+    const filter = { players: buildPlayersFilter({ filterIds: ids }, ids.length, 0) };
     const data = await this.transport.fetchJson(
       { views: ["kona_player_info"], filter },
       opts,
@@ -149,9 +151,9 @@ export class EspnFantasyClient {
     o: { matchupPeriodId?: number } = {},
     opts?: ReadOptions,
   ): Promise<Matchup[]> {
-    // SPEC-DEVIATION note: matchupPeriodId filtering is applied client-side;
-    // ESPN returns the full schedule for mMatchup. See spec section 5 item 3
-    // (scoringPeriodId vs matchupPeriodId) — verify semantics against a fixture.
+    // matchupPeriodId filtering is applied client-side; ESPN returns the full
+    // schedule for mMatchup, and each entry carries matchupPeriodId (verified
+    // live 2026-09-05).
     const data = await this.transport.fetchJson({ views: ["mMatchup"] }, opts);
     const all = mapMatchups(data);
     return o.matchupPeriodId == null
@@ -159,16 +161,31 @@ export class EspnFantasyClient {
       : all.filter((m) => m.matchupPeriodId === o.matchupPeriodId);
   }
 
-  /** mScoreboard — weekly scores for a scoring period. */
+  /**
+   * Live scores for a matchup period. `mScoreboard` entries carry NO
+   * matchupPeriodId on their own, so we request `mMatchup` alongside it — the
+   * combined payload gives each entry both its matchupPeriodId and the live
+   * scoring fields (totalPointsLive / totalProjectedPointsLive). Defaults to the
+   * league's current matchup period. (Verified live 2026-09-05.)
+   *
+   * NOTE: the argument is named scoringPeriodId for parity with ESPN's URL param,
+   * but results are matched on matchupPeriodId (== week in the regular season; a
+   * playoff matchup period can span multiple scoring periods).
+   */
   async getScoreboard(
     o: { scoringPeriodId?: number } = {},
     opts?: ReadOptions,
   ): Promise<Matchup[]> {
     const data = await this.transport.fetchJson(
-      { views: ["mScoreboard"], params: { scoringPeriodId: o.scoringPeriodId } },
+      {
+        views: ["mMatchup", "mScoreboard"],
+        params: { scoringPeriodId: o.scoringPeriodId },
+      },
       opts,
     );
-    return mapMatchups(data);
+    const all = mapMatchups(data);
+    const target = o.scoringPeriodId ?? currentMatchupPeriod(data);
+    return target == null ? all : all.filter((m) => m.matchupPeriodId === target);
   }
 
   /** mTeam — standings (record block: W/L/T, points for/against). */
@@ -182,9 +199,9 @@ export class EspnFantasyClient {
     o: TransactionQuery = {},
     opts?: ReadOptions,
   ): Promise<Transaction[]> {
-    // SPEC-DEVIATION note: mTransactions2 payloads vary by type; the types /
-    // teamId filters are applied client-side. See spec section 5 item 4 —
-    // confirm items[] mapping against fixtures for waivers/adds/drops/trades.
+    // types / teamId filters are applied client-side (mTransactions2 returns all).
+    // items[] mapping verified against live waiver ADD/DROP payloads 2026-09-05;
+    // trade payloads still to be confirmed against a live sample.
     const data = await this.transport.fetchJson(
       {
         views: ["mTransactions2"],
@@ -211,32 +228,38 @@ export class EspnFantasyClient {
   }
 
   /**
-   * kona_player_info — actual + projected weekly points from the stats blocks
-   * already present in the player payload.
+   * kona_player_info — actual + projected points from the `stats[]` blocks
+   * embedded in each player payload (statSourceId 0 = actual, 1 = projected).
+   *
+   * Two ESPN requirements here, both verified live 2026-09-05:
+   *  - a filter `limit` must be accompanied by a sort, else HTTP 400
+   *    ("Limit request must be accompanied by a sort"); buildPlayersFilter adds one.
+   *  - scoringPeriodId must NOT be sent as a URL query param on this view (400);
+   *    the embedded splits already carry per-period data, so we scope client-side.
    */
   async getPlayerStats(
     o: PlayerStatsQuery,
     opts?: ReadOptions,
   ): Promise<PlayerStats[]> {
-    const playersFilter: Record<string, unknown> = {};
-    if (o.playerIds && o.playerIds.length > 0) {
-      playersFilter["filterIds"] = { value: o.playerIds };
-      playersFilter["limit"] = o.playerIds.length;
-    } else {
-      playersFilter["limit"] = DEFAULT_PLAYER_LIMIT;
-    }
-    // SPEC-DEVIATION note: scoringPeriodId stat scoping is passed as a query
-    // param; ESPN's exact stat-filter mechanics need fixture verification
-    // (spec section 5 item 3).
+    const want =
+      o.playerIds && o.playerIds.length > 0
+        ? o.playerIds.length
+        : DEFAULT_PLAYER_LIMIT;
+    const filter = {
+      players: buildPlayersFilter({ filterIds: o.playerIds }, want, 0),
+    };
     const data = await this.transport.fetchJson(
-      {
-        views: ["kona_player_info"],
-        filter: { players: playersFilter },
-        params: { scoringPeriodId: o.scoringPeriodId },
-      },
+      { views: ["kona_player_info"], filter },
       opts,
     );
-    return mapPlayerStats(data);
+    let stats = mapPlayerStats(data);
+    if (o.scoringPeriodId != null) {
+      stats = stats.map((s) => ({
+        ...s,
+        splits: s.splits.filter((sp) => sp.scoringPeriodId === o.scoringPeriodId),
+      }));
+    }
+    return stats;
   }
 
   /**

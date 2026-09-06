@@ -202,6 +202,12 @@ function matchupSide(side: any): MatchupSide | null {
   return result;
 }
 
+/** The league's current matchup period (week), from the top-level status block. */
+export function currentMatchupPeriod(data: any): number | null {
+  const p = data?.status?.currentMatchupPeriod;
+  return typeof p === "number" ? p : null;
+}
+
 export function mapMatchups(data: any): Matchup[] {
   const schedule: any[] = data?.schedule ?? [];
   const out: Matchup[] = [];

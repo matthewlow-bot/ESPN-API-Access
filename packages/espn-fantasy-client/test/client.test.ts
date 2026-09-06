@@ -196,3 +196,86 @@ test("getPlayersByIds: empty ids short-circuits without a fetch", async () => {
   assert.deepEqual(out, []);
   assert.equal(calls.length, 0);
 });
+
+// --- regressions from live validation 2026-09-05 -------------------------
+// ESPN rejects a filter `limit` unless a sort is present ("Limit request must
+// be accompanied by a sort"). getPlayersByIds and getPlayerStats both send a
+// limit, so both MUST include a sort or they 400 in production.
+
+test("getPlayersByIds: filter carries a sort (else ESPN 400s on limit)", async () => {
+  const { impl, calls } = fakeFetch(() => ({ status: 200, body: JSON.stringify({ players: [] }) }));
+  const client = new EspnFantasyClient({ creds: CREDS, fetchImpl: impl });
+  await client.getPlayersByIds([4429795, 3953687]);
+  assert.match(calls[0]!.url, /view=kona_player_info/);
+  const filter = JSON.parse(calls[0]!.headers["X-Fantasy-Filter"]!);
+  assert.ok(filter.players.sortDraftRanks, "sort must accompany the limit");
+  assert.equal(filter.players.limit, 2);
+  assert.deepEqual(filter.players.filterIds.value, [4429795, 3953687]);
+});
+
+test("getPlayerStats: sorts, sends no scoringPeriodId URL param, scopes splits client-side", async () => {
+  // Real shape: stats are embedded per player as stats[] with statSourceId
+  // 0 = actual, 1 = projected, keyed by scoringPeriodId.
+  const body = JSON.stringify({
+    players: [
+      {
+        player: {
+          id: 4429795,
+          fullName: "Jahmyr Gibbs",
+          stats: [
+            { statSourceId: 0, scoringPeriodId: 1, appliedTotal: 24.3 },
+            { statSourceId: 1, scoringPeriodId: 1, appliedTotal: 21.0 },
+            { statSourceId: 0, scoringPeriodId: 2, appliedTotal: 10.0 },
+          ],
+        },
+      },
+    ],
+  });
+  const { impl, calls } = fakeFetch(() => ({ status: 200, body }));
+  const client = new EspnFantasyClient({ creds: CREDS, fetchImpl: impl });
+  const stats = await client.getPlayerStats({ playerIds: [4429795], scoringPeriodId: 1 });
+
+  // scoringPeriodId must NOT be a URL query param on kona_player_info (else 400)
+  assert.doesNotMatch(calls[0]!.url, /scoringPeriodId/);
+  const filter = JSON.parse(calls[0]!.headers["X-Fantasy-Filter"]!);
+  assert.ok(filter.players.sortDraftRanks, "sort must accompany the limit");
+
+  assert.equal(stats.length, 1);
+  assert.equal(stats[0]!.splits.length, 1); // scoped client-side to period 1
+  assert.equal(stats[0]!.splits[0]!.scoringPeriodId, 1);
+  assert.equal(stats[0]!.splits[0]!.applied, 24.3);
+  assert.equal(stats[0]!.splits[0]!.projected, 21.0);
+});
+
+test("getScoreboard: requests mMatchup+mScoreboard, defaults to current matchup period", async () => {
+  // mScoreboard entries carry no matchupPeriodId; requesting mMatchup alongside
+  // supplies it. Defaults to status.currentMatchupPeriod.
+  const body = JSON.stringify({
+    status: { currentMatchupPeriod: 1 },
+    schedule: [
+      {
+        matchupPeriodId: 1,
+        id: 1,
+        home: { teamId: 8, totalPoints: 0, totalProjectedPointsLive: 108.7 },
+        away: { teamId: 5, totalPoints: 0, totalProjectedPointsLive: 119.5 },
+        winner: "UNDECIDED",
+      },
+      {
+        matchupPeriodId: 2,
+        id: 7,
+        home: { teamId: 8, totalPoints: 0, totalProjectedPointsLive: 0 },
+        away: { teamId: 5, totalPoints: 0, totalProjectedPointsLive: 0 },
+        winner: "UNDECIDED",
+      },
+    ],
+  });
+  const { impl, calls } = fakeFetch(() => ({ status: 200, body }));
+  const client = new EspnFantasyClient({ creds: CREDS, fetchImpl: impl });
+  const board = await client.getScoreboard();
+
+  assert.match(calls[0]!.url, /view=mMatchup/);
+  assert.match(calls[0]!.url, /view=mScoreboard/);
+  assert.equal(board.length, 1); // only the current matchup period
+  assert.equal(board[0]!.matchupPeriodId, 1);
+  assert.equal(board[0]!.home.projectedPoints, 108.7);
+});
