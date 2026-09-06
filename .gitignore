@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Env / secrets (ESPN cookies, etc.)
+.env
+.env.local
+*.local
+
+# Logs
+*.log
+
+# OS
+.DS_Store
