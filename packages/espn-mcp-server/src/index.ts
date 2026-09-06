@@ -6,9 +6,8 @@
 // (bot resilience profile, cache ~120s) and exposes the spec 3.2 tools 1:1.
 // It holds no ESPN logic — it forwards calls to the library and shapes output.
 //
-// TODO (spec section 5.1): OpenClaw transport is not yet confirmed. stdio is
-// implemented here; if OpenClaw requires HTTP/SSE instead, swap the transport
-// in main() once docs.openclaw.ai confirms the registration/launch model.
+// OpenClaw transport: confirmed stdio, registered via `openclaw mcp add`
+// (see OPENCLAW.md). Credential env-injection gotchas are documented there too.
 // ---------------------------------------------------------------------------
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -23,20 +22,11 @@ import {
   type EspnCreds,
 } from "espn-fantasy-client";
 
+import { parseEspnCreds } from "./creds.js";
 import { TOOLS, stripRaw } from "./tools.js";
 
 const SERVER_NAME = "espn-mcp-server";
 const SERVER_VERSION = "0.1.0";
-
-/** Read ESPN creds from env once at startup. Returns null if incomplete. */
-function loadCreds(): EspnCreds | null {
-  const leagueId = process.env["ESPN_LEAGUE_ID"]?.trim();
-  const season = Number(process.env["ESPN_SEASON"] ?? 2026);
-  const espnS2 = process.env["ESPN_S2"]?.trim();
-  const swid = process.env["ESPN_SWID"]?.trim();
-  if (!leagueId || !espnS2 || !swid) return null;
-  return { leagueId, season, espnS2, swid };
-}
 
 /** Build the one shared client using the bot resilience profile (spec 2.1/3.2). */
 function makeClient(creds: EspnCreds): EspnFantasyClient {
@@ -48,12 +38,16 @@ function makeClient(creds: EspnCreds): EspnFantasyClient {
   });
 }
 
-const NOT_CONFIGURED_MESSAGE =
-  "ESPN creds not configured. Set ESPN_LEAGUE_ID, ESPN_SEASON, ESPN_S2, and ESPN_SWID in the server environment.";
-
 async function main(): Promise<void> {
-  const creds = loadCreds();
-  const client = creds ? makeClient(creds) : null;
+  const credsResult = parseEspnCreds(process.env);
+  const client = credsResult.ok ? makeClient(credsResult.creds) : null;
+  // Actionable message shown when a tool is called without a usable client:
+  // distinguishes "not configured / missing" from "malformed paste" so a bad
+  // paste is never confused with an expired/wrong-league 401 from ESPN.
+  const credsError = credsResult.ok ? null : credsResult.message;
+  if (credsResult.ok) {
+    for (const w of credsResult.warnings) console.error(`[${SERVER_NAME}] ${w}`);
+  }
 
   const server = new Server(
     { name: SERVER_NAME, version: SERVER_VERSION },
@@ -79,7 +73,7 @@ async function main(): Promise<void> {
     if (!client) {
       return {
         isError: true,
-        content: [{ type: "text", text: NOT_CONFIGURED_MESSAGE }],
+        content: [{ type: "text", text: credsError ?? "ESPN creds not configured." }],
       };
     }
 
@@ -106,7 +100,7 @@ async function main(): Promise<void> {
   // Note: do NOT write to stdout — it carries the MCP protocol on stdio.
   console.error(
     `${SERVER_NAME} v${SERVER_VERSION} ready on stdio` +
-      (client ? "" : " (creds NOT configured — tools will return an error)"),
+      (client ? "" : ` (creds unusable — tools will return: ${credsError})`),
   );
 }
 
