@@ -380,6 +380,47 @@ Missing creds → the server starts but every tool returns a clear "not configur
 `raw()` (the escape hatch) — kept library-only to avoid handing an agent an unbounded
 ESPN fetch. Revisit if a real need appears.
 
+### 3.4 Wiring into OpenClaw (verified against docs.openclaw.ai, 2026-09-05)
+
+OpenClaw natively connects to MCP servers (`mcp.servers` in `~/.openclaw/openclaw.json`,
+JSON5). Transports: Streamable HTTP, SSE, or **Stdio** — our server is stdio, which is the
+simplest and needs no HTTP surface. The stdout stream must stay protocol-only (status/logs
+to stderr — already the case). Host runs **Node 26** (min 22.22.3+).
+
+**Get the code onto the OpenClaw host** (git clone or NAS copy), then build the whole
+workspace so the stdio entry and its `espn-fantasy-client` workspace dep both resolve:
+```
+corepack pnpm install      # at repo root — creates the workspace symlinks
+corepack pnpm -r build     # builds espn-fantasy-client AND espn-mcp-server
+```
+
+**Register the server** (CLI form):
+```
+openclaw mcp add espn \
+  --command node \
+  --arg dist/index.js \
+  --cwd <repo>/packages/espn-mcp-server
+openclaw mcp doctor espn --probe    # proves reachability + lists the 12 tools
+```
+Or directly in config:
+```json5
+{ mcp: { servers: { espn: {
+  command: "node",
+  args: ["<repo>/packages/espn-mcp-server/dist/index.js"],
+  transport: "stdio",
+  enabled: true,
+} } } }
+```
+
+**Credentials:** the server reads `ESPN_LEAGUE_ID` / `ESPN_SEASON` / `ESPN_S2` / `ESPN_SWID`
+from env. OpenClaw's docs are explicit: **keep credentials out of config literals — use the
+supported secret mechanism** for the env values, never hardcode the cookies in
+`openclaw.json` (and never in git).
+
+**Update flow when ESPN breaks something:** patch the library here → push → on the host
+`git pull && corepack pnpm -r build` → OpenClaw hot-reload picks up the change (or
+`openclaw mcp reload`). Single source of truth, patched once.
+
 ---
 
 ## 4. Workspace & tooling
@@ -439,8 +480,9 @@ coincide (week N); a playoff matchup period can span multiple scoring periods.
 **Transaction shape** — `items[]` mapping verified against live waiver ADD/DROP payloads.
 
 ### Still open
-1. **OpenClaw MCP transport** — confirm stdio vs HTTP and the exact registration/launch
-   config from docs.openclaw.ai. Affects only `espn-mcp-server/src/index.ts`.
+1. **OpenClaw MCP transport — RESOLVED.** OpenClaw natively connects MCP servers via
+   `mcp.servers` config; our stdio transport is directly supported. Full wiring recipe in
+   §3.4. No code change needed to `espn-mcp-server/src/index.ts`.
 2. **In-season data** — standings/matchup results were all-zero at validation time
    (preseason, 2026-09-05). Re-verify record/rank/points parsing once Week 1 completes.
 3. **Trade transactions** — waiver adds/drops confirmed live; a `TRADE_ACCEPTED` payload
