@@ -1,0 +1,16 @@
+{
+  "players": [
+    {
+      "id": 3139477,
+      "player": {
+        "id": 3139477,
+        "fullName": "Patrick Mahomes",
+        "stats": [
+          { "scoringPeriodId": 1, "statSourceId": 0, "appliedTotal": 24.3 },
+          { "scoringPeriodId": 1, "statSourceId": 1, "appliedTotal": 21.0 },
+          { "scoringPeriodId": 2, "statSourceId": 1, "appliedTotal": 22.5 }
+        ]
+      }
+    }
+  ]
+}

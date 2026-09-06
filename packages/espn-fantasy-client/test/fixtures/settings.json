@@ -1,0 +1,10 @@
+{
+  "settings": {
+    "name": "Cool People League",
+    "size": 12,
+    "scoringSettings": { "scoringType": "PPR" },
+    "draftSettings": { "type": "AUCTION", "auctionBudget": 300, "pickOrder": [1, 2, 3, 4] },
+    "rosterSettings": { "lineupSlotCounts": { "0": 1, "2": 2, "4": 2, "6": 1, "16": 1, "17": 1 } }
+  },
+  "teams": [{ "id": 1 }, { "id": 2 }]
+}

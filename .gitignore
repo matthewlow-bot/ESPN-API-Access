@@ -1,6 +1,10 @@
 # Dependencies
 node_modules/
 
+# Build output
+dist/
+*.tsbuildinfo
+
 # Env / secrets (ESPN cookies, etc.)
 .env
 .env.local

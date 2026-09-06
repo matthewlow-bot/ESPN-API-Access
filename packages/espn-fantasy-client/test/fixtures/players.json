@@ -1,0 +1,45 @@
+{
+  "players": [
+    {
+      "id": 3139477,
+      "player": {
+        "id": 3139477,
+        "fullName": "Patrick Mahomes",
+        "defaultPositionId": 1,
+        "proTeamId": 12,
+        "ownership": { "auctionValueAverage": 42.5, "percentOwned": 99.8 },
+        "draftRanksByRankType": { "PPR": { "auctionValue": 40 } }
+      }
+    },
+    {
+      "id": 4241457,
+      "player": {
+        "id": 4241457,
+        "firstName": "Bijan",
+        "lastName": "Robinson",
+        "defaultPositionId": 2,
+        "proTeamId": 1,
+        "ownership": { "percentOwned": 99.9 },
+        "draftRanksByRankType": { "PPR": { "auctionValue": 55 }, "STANDARD": { "auctionValue": 50 } }
+      }
+    },
+    {
+      "id": 999999,
+      "player": {
+        "id": 999999,
+        "fullName": "Unmapped Position Guy",
+        "defaultPositionId": 99,
+        "proTeamId": 500,
+        "ownership": {}
+      }
+    },
+    {
+      "id": 111111,
+      "player": {
+        "id": 111111,
+        "defaultPositionId": 3,
+        "proTeamId": 2
+      }
+    }
+  ]
+}

@@ -413,15 +413,40 @@ ESPN-API-Access/
 
 ---
 
-## 5. Open items before coding
+## 5. Open items
 
+### Resolved by live validation (2026-09-05, league 503578)
+All 11 read methods were exercised against the live league. Three bugs were found and fixed
+(regression tests in `test/client.test.ts`):
+
+- **`getPlayerStats` — was HTTP 400.** Root cause: (a) `scoringPeriodId` was sent as a URL
+  query param on `kona_player_info`, which ESPN rejects; (b) a filter `limit` must be
+  accompanied by a sort ("Limit request must be accompanied by a sort"). Fix: sort via
+  `buildPlayersFilter`, no URL param, and scope splits to the requested `scoringPeriodId`
+  **client-side** (stats are embedded per player as `stats[]`, `statSourceId` 0 = actual /
+  1 = projected, keyed by `scoringPeriodId`).
+- **`getPlayersByIds` — was also HTTP 400** for the same "limit needs a sort" reason (it
+  wasn't exercised in the first capture). Fixed via `buildPlayersFilter`.
+- **`getScoreboard` — period was always 0.** `mScoreboard` entries carry **no**
+  `matchupPeriodId`; the period lives in top-level `status.currentMatchupPeriod`. Fix:
+  request `mMatchup` + `mScoreboard` together (the combined payload gives each entry its
+  `matchupPeriodId` plus the live `totalPointsLive` / `totalProjectedPointsLive` fields),
+  default to the current matchup period, and match on `matchupPeriodId`.
+
+Also confirmed: **`scoringPeriodId` vs `matchupPeriodId`** — `mMatchup` entries are keyed by
+`matchupPeriodId`; the scoreboard is the current matchup period. In the regular season they
+coincide (week N); a playoff matchup period can span multiple scoring periods.
+**Transaction shape** — `items[]` mapping verified against live waiver ADD/DROP payloads.
+
+### Still open
 1. **OpenClaw MCP transport** — confirm stdio vs HTTP and the exact registration/launch
    config from docs.openclaw.ai. Affects only `espn-mcp-server/src/index.ts`.
-2. **Fixture capture** — pull one live sample per view (settings/teams/draft/players/
-   rosters/matchups/standings/transactions/stats) into `test/fixtures/` to drive the
-   thin-typing mappers. Needs valid cookies once.
-3. **`scoringPeriodId` vs `matchupPeriodId`** — verify ESPN's week semantics for
-   matchups/scoreboard/stats against a fixture (they differ, and this trips people up).
-4. **Transaction shape** — `mTransactions2` payloads vary by type; confirm the `items[]`
-   mapping covers waivers, free-agent adds/drops, and trades against fixtures.
+2. **In-season data** — standings/matchup results were all-zero at validation time
+   (preseason, 2026-09-05). Re-verify record/rank/points parsing once Week 1 completes.
+3. **Trade transactions** — waiver adds/drops confirmed live; a `TRADE_ACCEPTED` payload
+   still to be checked against a real sample.
+4. **`getPlayerStats` period coverage** — the embedded `stats[]` returns a default set of
+   splits; a requested `scoringPeriodId` outside that set yields empty splits. Add an
+   explicit `filterStatsForTopScoringPeriodIds` filter if a specific historical week must
+   be guaranteed.
 ```
