@@ -15,6 +15,23 @@ Delivery targets (channel IDs are identifiers, not secrets — safe to record):
 | `#2026-season` | `1546281412640899084` | Weekly updates (Weekly Summary; likely Pre-Game Hype too) |
 | `#stickers`    | `1546285952606011433` | Sticker maker — users post pics, bot turns them into stickers |
 
+## Persona
+
+**One bot agent, swappable persona** — not one agent per persona. A persona is a
+`SOUL.md` file (tone, humor, boundaries) loaded at session start; OpenClaw's
+**`agent:bootstrap` hook** can swap which persona file is injected, so the single
+agent can change voices.
+
+- **Current persona: Guillermo De La Cruz** (WWDITS familiar — anxious, deferential,
+  loyal). Its `SOUL.md` is the active one.
+- Persona is a property of the **agent**, applied globally — **not set per
+  automation.** So the commands below carry **no persona flag**; whatever `SOUL.md`
+  is active is the voice. (They target the bot agent via `--session`; add `--agent
+  <bot>` only if the bot isn't the default agent on the gateway.)
+- **Switching personas** = the `agent:bootstrap` hook selecting a different `SOUL.md`.
+  The *swap mechanism* is OpenClaw-native; what *drives* the pick (manual / scheduled
+  / league vote) is still unspecified — see `002-Specs.md` open items.
+
 ## Waiver Reminder (Event 3 — clock-driven)
 
 - **What:** weekly nag, the last call before Wednesday morning's waiver run.
