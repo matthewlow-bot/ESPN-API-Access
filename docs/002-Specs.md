@@ -47,9 +47,12 @@ Events fall into three fundamentally different trigger mechanisms. This distinct
 - **Delivery:** OpenClaw
 
 ### 4. Weekly Summary
-- **Trigger type:** Clock-driven, anchored to "after that week's games finish" (not a fixed day) — *we build*
-- **Content:** Recap tone; pulls from the merged event list (see Data Layer below)
+- **Trigger type:** Clock-driven, anchored to "after that week's games finish" (not a fixed day) — *we build*. Timing comes from the NFL-schedule source (see `003-Automations.md`).
+- **Content — scoped in two phases:**
+  - **v1 (basic recap, buildable now):** final scores, matchup results, standings movement, notable transactions — all from ESPN league data via `espn-mcp-server` (already built). No live NFL context needed.
+  - **Later (rich recap):** pulls from the merged event list (biggest blowout, worst benching, injuries, etc.). Blocked on the event-object layer + the live NFL-stats source (neither built).
 - **Delivery:** OpenClaw
+- **Note:** Trigger and v1 content are unblocked today; only the rich content waits on the live-stats source.
 
 ### 5. Conversational Join-In
 - **Trigger type:** Message-driven — OpenClaw listens to channel activity and decides whether a given human message warrants a response — *OpenClaw owns*
