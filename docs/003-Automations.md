@@ -35,12 +35,18 @@ openclaw automations add "0 17 * * 2" \
 Manage: `openclaw automations list` / `openclaw automations remove <job-id>`.
 
 ### Open checks (verify before trusting)
-- **Proactive firing:** confirm the job fires on its own without a manual message
-  first — see OpenClaw issue #14501. If it doesn't fire autonomously, this trigger
-  is moot and we need a separate poker.
-- **Discord delivery flag:** `--channel discord --to "channel:<id>"` is inferred
-  from the Telegram/Slack examples in the docs, not confirmed for Discord. Verify
-  the exact flag on this gateway version.
+- ~~**Proactive firing**~~ ✅ **handled by the OpenClaw cron skill** — the skill
+  drives autonomous firing, so the #14501 "only fires after a manual message" issue
+  doesn't apply here. No separate poker needed.
+- ~~**Discord delivery flag**~~ ✅ **confirmed (2026-09-08):** `--channel discord`
+  is correct; the target accepts a bare numeric id or `channel:<id>`. Automations
+  use `--to`; the standalone `openclaw message send` uses `--target` (same values).
+
+To test delivery to the channel independently of the schedule:
+
+```bash
+openclaw message send --channel discord --target channel:1546282433098547280 --message "waiver reminder test"
+```
 
 ### Reference — ESPN waiver settings for this league (as of 2026-09-07)
 From `espn_get_settings` → `acquisitionSettings`: processes daily **except Tuesday**
