@@ -31,10 +31,11 @@ Events fall into three fundamentally different trigger mechanisms. This distinct
 
 ## Events
 
-### 1. Pre-Game Hype
-- **Trigger type:** Clock-driven, relative to that week's actual game start times (not a fixed day) — *we build*
-- **Content:** Hype/preview tone — previews matchups, sets stakes for the week
-- **Delivery:** OpenClaw (channel, formatting, ping rules via channel config)
+### 1. Pre-Game Post — lineup-lock reminder + hype  *(merged with Event 7)*
+- **Trigger type:** Clock-driven, **1 hour before the first game of each game day** (Thu/Sun/Mon + holidays) — *we build*. Schedule-driven, sharing the exact mechanism and timing computation as the former Event 7 (Game Reminders).
+- **Content:** A **single post** written by the persona — **lineup-lock reminder first** ("games lock in ~1 hour, set your lineups"), **then a little pre-game hype** previewing this week's matchups. Matchup data comes from ESPN (`espn_get_matchups`, already available); the agent fetches it at fire time.
+- **Delivery:** OpenClaw, to **`#reminders`** (`1546282433098547280`).
+- **Note:** Event 1 (Pre-Game Hype) and Event 7 (Game Reminders) were **merged (2026-09-08)** — same trigger time, so one post does both. Full mechanism in `003-Automations.md`.
 
 ### 2. In-Game Smack Talk
 - **Trigger type:** Live-event-driven — needs a live signal (score change, big play) to react to — *we build*
@@ -69,11 +70,10 @@ Events fall into three fundamentally different trigger mechanisms. This distinct
   - **Feasibility — RESOLVED (2026-09-08), via file paths (not binary-over-JSON):** OpenClaw downloads inbound media to a temp file and exposes `{{AttachmentPath}}` (local path) + `{{AttachmentUrl}}`; outbound sending accepts a local file path and **keeps transparency as PNG** (only opaque images get recompressed to JPEG). Pipeline: post → `{{AttachmentPath}}` → our tool does cutout + white outline → write transparent PNG → OpenClaw posts it back. **Implication:** best built as an OpenClaw **command/node** (file in, file out), not an MCP tool — the one feature that breaks the "everything is an MCP tool" pattern. **Still confirm on the gateway:** that Discord *image attachments* specifically populate `{{AttachmentPath}}`.
   - Needs its own follow-up spec.
 
-### 7. Game Reminders (lineup-lock)
-- **Trigger type:** Clock-driven, **1 hour before the first kickoff of each game day** (Thu/Sun/Mon + holidays) — *we build*. Schedule-driven (Option C): derived from real NFL kickoffs, not a fixed cron, because game times move.
-- **Content:** Reminder/nag tone — "games lock in ~1 hour, set your lineups."
-- **Delivery:** OpenClaw, to `#reminders` (`1546282433098547280`).
-- **Note:** Full mechanism (weekly regenerator → one-shot `--at` reminders) and the reusable NFL-schedule source are specced in `003-Automations.md`. This is the reminders hub's second job, alongside the waiver reminder (Event 3).
+### 7. Game Reminders (lineup-lock) — **MERGED into Event 1**
+Merged (2026-09-08) with Pre-Game Hype: same trigger time (1 hr before each game
+day's first kickoff), so a single post to `#reminders` does both — lineup-lock
+reminder first, then hype. See **Event 1** and `003-Automations.md`.
 
 ## Content/Timing/Delivery Decomposition (general principle)
 

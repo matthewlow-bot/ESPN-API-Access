@@ -71,16 +71,22 @@ at hour 11 (ESPN uses ET); `WAIVERS_TRADITIONAL`, 48-hour waiver period. The
 Tuesday-5PM-PT reminder is a human choice (last call before Wednesday), not derived
 from these fields.
 
-## Game Reminders (lineup-lock — schedule-driven / Option C)
+## Pre-Game Post — lineup-lock reminder + hype (schedule-driven / Option C)
 
-Also delivered to `#reminders`. Unlike the waiver reminder (a fixed weekly cron),
-this one is **derived from the real NFL schedule**, because game times move.
+*(Merges Events 1 + 7 — same trigger time, one post.)* Delivered to `#reminders`.
+Unlike the waiver reminder (a fixed weekly cron), this one is **derived from the
+real NFL schedule**, because game times move.
 
-- **What:** a lineup-lock nudge — "games lock in 1 hour, set your lineup."
+- **What:** a **single** post — lineup-lock nudge **first** ("games lock in ~1 hour,
+  set your lineups"), **then a little pre-game hype** previewing this week's
+  matchups. The persona (active `SOUL.md`, currently Guillermo) writes it.
 - **When:** **1 hour before the first kickoff of each game day** that week
-  (Thursday / Sunday / Monday, plus holiday game days). ~2–3 reminders/week — one
-  "last call before today's games lock" per slate. (ESPN locks each player at their
-  own game's kickoff, so per-game-day is the useful granularity.)
+  (Thursday / Sunday / Monday, plus holiday game days). ~2–3 posts/week — one per
+  slate. (ESPN locks each player at their own game's kickoff, so per-game-day is the
+  useful granularity.)
+- **Content data:** matchup previews come from ESPN via `espn_get_matchups`
+  (already available in `espn-mcp-server`) — the agent fetches it **at fire time**;
+  the regenerator doesn't need to embed matchup data, just schedule the prompt.
 - **Delivery:** `#reminders` (`1546282433098547280`).
 
 ### Mechanism — weekly regenerator + one-shot reminders
@@ -94,8 +100,8 @@ than run a fixed cron:
 3. For each target time it creates an OpenClaw **one-shot** reminder:
    ```bash
    openclaw automations add --at "<ISO-8601-UTC>" \
-     "Post a lineup-lock reminder: first games kick off in ~1 hour, set your lineups now." \
-     --name "Game Reminder <day>" \
+     "First games kick off in ~1 hour. Post to the league: (1) a lineup-lock reminder to set lineups now, then (2) a little pre-game hype previewing this week's matchups — pull the matchups with espn_get_matchups." \
+     --name "Pre-Game Post <day>" \
      --announce --channel discord --to "channel:1546282433098547280"
    ```
 4. One-shots fire once and self-clean; next week's run creates the new set.
@@ -115,6 +121,12 @@ So build the schedule fetch **once** as a reusable tool.
 - **Note:** this is the "NFL context" second source the spec (`002-Specs.md`)
   anticipated — the *schedule* slice of it (live in-game stats, for smack talk,
   is a later, larger piece).
+
+### Post target (clue for the regenerator)
+Game-reminder posts go to **`#reminders` = `1546282433098547280`**. The regenerator
+must set `--announce --channel discord --to "channel:1546282433098547280"` on every
+`--at` job it creates (as in the command above). This is the destination — don't
+lose it when the posting code is written.
 
 ### To build / confirm
 - **Confirm the ESPN scoreboard API is reachable from the OpenClaw host** (403s
