@@ -31,6 +31,12 @@ agent can change voices.
 - **Switching personas** = the `agent:bootstrap` hook selecting a different `SOUL.md`.
   The *swap mechanism* is OpenClaw-native; what *drives* the pick (manual / scheduled
   / league vote) is still unspecified — see `002-Specs.md` open items.
+- **Tone lives here, not in prompts.** Attitude decisions — e.g. **roasting** the
+  week's losers — belong in the active `SOUL.md`, so every post carries them
+  consistently. Automation prompts supply only *content / targets* (what data to
+  surface, whom to single out); the *voice* is the persona. For Guillermo, write the
+  roast in-character — anxious, backhanded, passive-aggressive — not a generic savage
+  takedown.
 
 ## Waiver Reminder (Event 3 — clock-driven)
 
@@ -164,3 +170,36 @@ lose it when the posting code is written.
 - ⬜ **Which week** ESPN returns on the regenerator's run day — the live run returned
   upcoming games with the past day filtered, which is the desired shape; eyeball once
   on the real cron day to be sure it's the intended week (pass `--week`/`--year` if not).
+
+## Weekly Summary v1 (Event 4 — clock-driven)
+
+A once-a-week recap to `#2026-season`, written by the persona. **v1 = basic recap
+from ESPN league data only** (no live-stats flavor yet — see `002-Specs.md`). Like
+the waiver reminder, this is a **plain fixed cron** — no repo code, no schedule
+source. Content comes from the already-built `espn-mcp-server` tools; the agent
+calls them at fire time.
+
+- **When:** Tuesday **9:00 AM PT** (`0 9 * * 2`, `--tz America/Los_Angeles`) — after
+  Monday Night Football is done, before Wednesday's waivers.
+- **Delivery:** `#2026-season` (`1546281412640899084`).
+
+```bash
+openclaw automations add "0 9 * * 2" \
+  "Post the weekly fantasy recap for the league. Use the espn_* tools to get real data for the week that just finished: final scores and head-to-head results (espn_get_scoreboard / espn_get_matchups), the updated standings (espn_get_standings), and notable roster moves — waiver adds/drops and trades (espn_get_transactions). Write a recap covering: who won and lost and by how much, any blowouts or nail-biters, standings shake-ups (who climbed/fell), and the week's notable transactions. Single out roast-worthy targets from the data: the week's lowest-scoring team, the biggest blowout (name who got blown out), and the narrowest escape. Use only the league's actual data — do not invent players, scores, or stats." \
+  --name "Weekly Summary" \
+  --tz America/Los_Angeles \
+  --session main \
+  --announce --channel discord --to "channel:1546281412640899084"
+```
+
+The prompt supplies roast *targets* (lowest scorer, biggest blowout, narrowest
+win); the roasting *voice* is a Guillermo `SOUL.md` trait (see Persona) — not in
+this prompt, so it stays consistent across every post.
+
+### To confirm / later
+- ⬜ **Which scoring period** the `espn_*` tools return on a Tuesday — the prompt says
+  "the week that just finished," but if the tools default to the *upcoming* period,
+  pass an explicit `scoringPeriodId` (the completed week) so it recaps the right one.
+- The recap **prompt is a first draft** — tune tone/length once we see Guillermo's output.
+- Rich recap (biggest blowout, worst benching, injuries) is deferred to the live
+  NFL-stats source.
