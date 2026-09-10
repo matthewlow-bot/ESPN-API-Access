@@ -134,6 +134,15 @@ importers:
         specifier: ^5.4.0
         version: 5.9.3
 
+  packages/nfl-schedule-client:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+
 packages:
 
   '@hono/node-server@2.1.1':
