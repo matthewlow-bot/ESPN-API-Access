@@ -1,0 +1,195 @@
+#!/usr/bin/env node
+// ---------------------------------------------------------------------------
+// pregame-regenerator
+//
+// Weekly host script. Reads this week's NFL kickoffs (nfl-schedule-client) and
+// (re)creates one OpenClaw one-shot "Pre-Game Post" job 1 hour before the first
+// game of each game day, delivered to #reminders. Each post is a lineup-lock
+// reminder + a little pre-game hype (Events 1+7, merged — see docs/003-Automations.md).
+//
+// Runs on the OpenClaw HOST (it shells out to `openclaw automations ...`).
+// DEFAULTS TO DRY-RUN: prints the plan. Pass --apply to actually create jobs.
+//
+// HOST-SIDE UNKNOWNS to confirm before trusting --apply (see docs/003-Automations.md):
+//   - which week ESPN returns for "current" on a Tuesday (step: resolve week);
+//   - the exact `openclaw automations list`/`remove` interface used for idempotency.
+// ---------------------------------------------------------------------------
+
+import { spawnSync } from "node:child_process";
+import { parseArgs } from "node:util";
+import {
+  NflScheduleClient,
+  firstKickoffPerGameDay,
+  DEFAULT_SCHEDULE_TZ,
+  type GameDayKickoff,
+} from "nfl-schedule-client";
+
+/** Delivery target: #reminders. See docs/003-Automations.md channel registry. */
+const REMINDERS_CHANNEL_ID = "1546282433098547280";
+
+/** Prompt handed to the (persona) agent when the job fires. */
+const PREGAME_PROMPT =
+  "First games kick off in ~1 hour. Post to the league: (1) a lineup-lock " +
+  "reminder to set lineups now, then (2) a little pre-game hype previewing this " +
+  "week's matchups — pull the matchups with espn_get_matchups.";
+
+interface Options {
+  apply: boolean;
+  tz: string;
+  leadMinutes: number;
+  channel: string;
+  week?: number;
+  year?: number;
+}
+
+function parseOptions(argv: string[]): Options {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      apply: { type: "boolean", default: false },
+      tz: { type: "string", default: DEFAULT_SCHEDULE_TZ },
+      "lead-minutes": { type: "string", default: "60" },
+      channel: { type: "string", default: REMINDERS_CHANNEL_ID },
+      week: { type: "string" },
+      year: { type: "string" },
+    },
+  });
+  const num = (v: string | undefined): number | undefined =>
+    v === undefined ? undefined : Number(v);
+  return {
+    apply: Boolean(values.apply),
+    tz: String(values.tz),
+    leadMinutes: Number(values["lead-minutes"]),
+    channel: String(values.channel),
+    week: num(values.week as string | undefined),
+    year: num(values.year as string | undefined),
+  };
+}
+
+/** A single planned post. */
+interface PlannedPost {
+  name: string;
+  /** ISO-8601 UTC — when the job fires (1h before the day's first kickoff). */
+  at: string;
+  gameDay: string;
+  firstKickoff: string;
+  gameCount: number;
+}
+
+/** Steps 4–5: turn per-game-day first kickoffs into future post targets. */
+function planPosts(
+  days: GameDayKickoff[],
+  leadMinutes: number,
+  now: Date,
+): PlannedPost[] {
+  const leadMs = leadMinutes * 60_000;
+  const posts: PlannedPost[] = [];
+  for (const day of days) {
+    const at = new Date(day.firstKickoffDate.getTime() - leadMs);
+    if (at.getTime() <= now.getTime()) continue; // step 5: drop past targets
+    posts.push({
+      name: `Pre-Game Post ${day.gameDay}`,
+      at: at.toISOString(),
+      gameDay: day.gameDay,
+      firstKickoff: day.firstKickoff,
+      gameCount: day.gameCount,
+    });
+  }
+  return posts;
+}
+
+/** Build the argv for `openclaw automations add` for one post. */
+function addArgs(post: PlannedPost, channel: string): string[] {
+  return [
+    "automations",
+    "add",
+    "--at",
+    post.at,
+    PREGAME_PROMPT,
+    "--name",
+    post.name,
+    "--announce",
+    "--channel",
+    "discord",
+    "--to",
+    `channel:${channel}`,
+  ];
+}
+
+function runOpenclaw(args: string[]): { ok: boolean; output: string } {
+  const res = spawnSync("openclaw", args, { encoding: "utf8" });
+  if (res.error) return { ok: false, output: String(res.error.message ?? res.error) };
+  const output = `${res.stdout ?? ""}${res.stderr ?? ""}`.trim();
+  return { ok: res.status === 0, output };
+}
+
+/**
+ * Step 6 (idempotency): best-effort removal of an existing job with this name so
+ * a re-run before the job fires doesn't double-post.
+ *
+ * TODO(host): the exact list/remove interface is unconfirmed. This tries
+ * `openclaw automations list --json`, expects an array of objects carrying a
+ * name/id, and removes matches by id. If the output shape differs, it logs and
+ * skips (fail-open) rather than guessing wrong — confirm on the gateway and adjust.
+ */
+function clearExisting(name: string): void {
+  const listed = runOpenclaw(["automations", "list", "--json"]);
+  if (!listed.ok) {
+    console.warn(`  ! could not list existing jobs to dedupe (${listed.output}); skipping clear`);
+    return;
+  }
+  let jobs: Array<Record<string, unknown>>;
+  try {
+    const parsed = JSON.parse(listed.output);
+    jobs = Array.isArray(parsed) ? parsed : (parsed?.automations ?? parsed?.jobs ?? []);
+  } catch {
+    console.warn("  ! `automations list --json` was not JSON as expected; skipping clear (confirm host interface)");
+    return;
+  }
+  for (const job of jobs) {
+    if (job?.name !== name) continue;
+    const id = (job.id ?? job.jobId ?? job.uuid) as string | undefined;
+    if (!id) continue;
+    const removed = runOpenclaw(["automations", "remove", id]);
+    console.log(`  - removed existing "${name}" (${id})${removed.ok ? "" : ` [warn: ${removed.output}]`}`);
+  }
+}
+
+async function main(): Promise<void> {
+  const opts = parseOptions(process.argv.slice(2));
+  const now = new Date();
+
+  // Steps 2–3: resolve week + fetch kickoffs.
+  const client = new NflScheduleClient();
+  const games = await client.getWeek({ week: opts.week, year: opts.year });
+
+  // Step 4: earliest kickoff per game day (day-agnostic).
+  const days = firstKickoffPerGameDay(games, opts.tz);
+  const posts = planPosts(days, opts.leadMinutes, now);
+
+  // Step 8: log the plan.
+  console.log(
+    `pregame-regenerator ${opts.apply ? "APPLY" : "DRY-RUN"} — ${games.length} games, ` +
+      `${days.length} game day(s), ${posts.length} post(s) to schedule ` +
+      `(tz=${opts.tz}, lead=${opts.leadMinutes}m, channel=${opts.channel})`,
+  );
+  if (posts.length === 0) {
+    console.log("  nothing to schedule (no future game days).");
+    return;
+  }
+  for (const post of posts) {
+    console.log(`  • ${post.name}: fire ${post.at}  (first kickoff ${post.firstKickoff}, ${post.gameCount} game(s))`);
+    if (opts.apply) {
+      clearExisting(post.name); // step 6
+      const created = runOpenclaw(addArgs(post, opts.channel)); // step 7
+      console.log(`    ${created.ok ? "created" : `FAILED: ${created.output}`}`);
+    } else {
+      console.log(`    would run: openclaw ${addArgs(post, opts.channel).map((a) => (a.includes(" ") ? JSON.stringify(a) : a)).join(" ")}`);
+    }
+  }
+}
+
+main().catch((err) => {
+  console.error("pregame-regenerator failed:", err?.message ?? err);
+  process.exitCode = 1;
+});

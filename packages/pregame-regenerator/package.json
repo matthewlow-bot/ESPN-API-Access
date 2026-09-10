@@ -1,0 +1,30 @@
+{
+  "name": "pregame-regenerator",
+  "version": "0.1.0",
+  "description": "Weekly host script: reads NFL kickoffs (nfl-schedule-client) and (re)creates one-shot OpenClaw 'Pre-Game Post' jobs 1h before each game day's first kickoff.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "pregame-regenerator": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "nfl-schedule-client": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}

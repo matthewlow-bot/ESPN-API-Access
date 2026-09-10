@@ -32,7 +32,7 @@ Events fall into three fundamentally different trigger mechanisms. This distinct
 ## Events
 
 ### 1. Pre-Game Post — lineup-lock reminder + hype  *(merged with Event 7)*
-- **Trigger type:** Clock-driven, **1 hour before the first game of each game day** (Thu/Sun/Mon + holidays) — *we build*. Schedule-driven, sharing the exact mechanism and timing computation as the former Event 7 (Game Reminders).
+- **Trigger type:** Clock-driven, **1 hour before the first game of each game day** — *we build*. One post per game day, for **whatever days actually have games that week** (not a fixed set — e.g. this week was Wed/Sun/Mon; a typical week is Thu/Sun/Mon; count varies 2–4). The `firstKickoffPerGameDay` helper is day-agnostic. Schedule-driven, sharing the exact mechanism as the former Event 7 (Game Reminders).
 - **Content:** A **single post** written by the persona — **lineup-lock reminder first** ("games lock in ~1 hour, set your lineups"), **then a little pre-game hype** previewing this week's matchups. Matchup data comes from ESPN (`espn_get_matchups`, already available); the agent fetches it at fire time.
 - **Delivery:** OpenClaw, to **`#reminders`** (`1546282433098547280`).
 - **Note:** Event 1 (Pre-Game Hype) and Event 7 (Game Reminders) were **merged (2026-09-08)** — same trigger time, so one post does both. Full mechanism in `003-Automations.md`.
