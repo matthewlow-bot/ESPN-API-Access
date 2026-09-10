@@ -21,7 +21,16 @@ node dist/index.js --apply
 
 Options: `--week <n>` / `--year <yyyy>` (default: ESPN "current" week),
 `--tz <IANA>` (default `America/New_York`), `--lead-minutes <n>` (default `60`),
-`--channel <discord-channel-id>` (default `#reminders`).
+`--channel <discord-channel-id>` (default `#reminders`),
+`--error-target <dm-target>` (or env `REGEN_ERROR_TARGET`).
+
+## Errors never hit the league channels
+
+Failures (a job that won't create, or a crash) are reported **to the admin via DM**
+— `--error-target` / `REGEN_ERROR_TARGET` — and set a non-zero exit code. They are
+**never** posted to a league channel. If no error target is set, errors log locally
+only. The target is passed straight to `openclaw message send --target`; confirm the
+Discord DM target syntax on the host (likely `user:<your-discord-user-id>`).
 
 Intended to be triggered by one fixed weekly cron (e.g. Tuesday). The jobs it
 creates are one-shots that fire once and self-clean; each run clears and rebuilds

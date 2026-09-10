@@ -40,6 +40,8 @@ interface Options {
   channel: string;
   week?: number;
   year?: number;
+  /** Where failures are reported (a DM target) — NEVER a league channel. */
+  errorTarget?: string;
 }
 
 function parseOptions(argv: string[]): Options {
@@ -52,6 +54,7 @@ function parseOptions(argv: string[]): Options {
       channel: { type: "string", default: REMINDERS_CHANNEL_ID },
       week: { type: "string" },
       year: { type: "string" },
+      "error-target": { type: "string" },
     },
   });
   const num = (v: string | undefined): number | undefined =>
@@ -63,6 +66,9 @@ function parseOptions(argv: string[]): Options {
     channel: String(values.channel),
     week: num(values.week as string | undefined),
     year: num(values.year as string | undefined),
+    // DM target for failure reports. Config at deploy (env or flag); never a league channel.
+    errorTarget:
+      (values["error-target"] as string | undefined) ?? process.env.REGEN_ERROR_TARGET,
   };
 }
 
@@ -155,8 +161,23 @@ function clearExisting(name: string): void {
   }
 }
 
-async function main(): Promise<void> {
-  const opts = parseOptions(process.argv.slice(2));
+/**
+ * Report a failure to the admin DM target. Errors NEVER go to a league channel —
+ * only to this configured DM target (or nowhere, if unset). If the notify itself
+ * fails, log locally; don't escalate to a channel.
+ */
+function notifyAdmin(target: string | undefined, message: string): void {
+  if (!target) {
+    console.error("  (no --error-target / REGEN_ERROR_TARGET set — error not DM'd)");
+    return;
+  }
+  const res = runOpenclaw([
+    "message", "send", "--channel", "discord", "--target", target, "--message", message,
+  ]);
+  if (!res.ok) console.error(`  ! failed to DM admin (${target}): ${res.output}`);
+}
+
+async function run(opts: Options): Promise<void> {
   const now = new Date();
 
   // Steps 2–3: resolve week + fetch kickoffs.
@@ -177,19 +198,39 @@ async function main(): Promise<void> {
     console.log("  nothing to schedule (no future game days).");
     return;
   }
+
+  const failures: string[] = [];
   for (const post of posts) {
     console.log(`  • ${post.name}: fire ${post.at}  (first kickoff ${post.firstKickoff}, ${post.gameCount} game(s))`);
     if (opts.apply) {
       clearExisting(post.name); // step 6
       const created = runOpenclaw(addArgs(post, opts.channel)); // step 7
-      console.log(`    ${created.ok ? "created" : `FAILED: ${created.output}`}`);
+      if (created.ok) {
+        console.log("    created");
+      } else {
+        console.log(`    FAILED: ${created.output}`);
+        failures.push(`${post.name}: ${created.output}`);
+      }
     } else {
       console.log(`    would run: openclaw ${addArgs(post, opts.channel).map((a) => (a.includes(" ") ? JSON.stringify(a) : a)).join(" ")}`);
     }
   }
+
+  // Partial-failure report → admin DM only, never a league channel.
+  if (failures.length > 0) {
+    notifyAdmin(
+      opts.errorTarget,
+      `pregame-regenerator: ${failures.length}/${posts.length} post(s) failed to schedule:\n${failures.join("\n")}`,
+    );
+    process.exitCode = 1;
+  }
 }
 
-main().catch((err) => {
-  console.error("pregame-regenerator failed:", err?.message ?? err);
+const opts = parseOptions(process.argv.slice(2));
+run(opts).catch((err) => {
+  const msg = err?.message ?? String(err);
+  console.error("pregame-regenerator failed:", msg);
+  // Fatal error → admin DM only, never a league channel.
+  notifyAdmin(opts.errorTarget, `pregame-regenerator crashed: ${msg}`);
   process.exitCode = 1;
 });

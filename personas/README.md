@@ -30,5 +30,6 @@ rotation, or a league vote choosing the persona. That's still an open item (see
 ## Adding a persona
 Copy `guillermo.md` as a template, rewrite the voice, and keep the same section shape
 (who you are / voice & tone / humor & roasting / boundaries). Keep the **boundaries**
-consistent across personas — no invented stats, Discord-length posts, stay in
-character — so only the *flavor* changes, not the rules.
+consistent across personas — no invented stats, **never post errors to the channel
+(stay silent on failure)**, Discord-length posts, stay in character — so only the
+*flavor* changes, not the rules.

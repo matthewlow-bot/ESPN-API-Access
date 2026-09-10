@@ -203,3 +203,35 @@ this prompt, so it stays consistent across every post.
 - The recap **prompt is a first draft** — tune tone/length once we see Guillermo's output.
 - Rich recap (biggest blowout, worst benching, injuries) is deferred to the live
   NFL-stats source.
+
+## Error handling — errors NEVER hit the league channels
+
+Policy: failures are reported to **the admin via DM**, never posted to a public
+league channel. Two layers:
+
+- **Regenerator (our code):** never targets a league channel on failure. It reports
+  to a configurable DM target — `--error-target <dm-target>` or env
+  `REGEN_ERROR_TARGET` — via `openclaw message send`. Partial failures (some jobs
+  didn't create) and fatal crashes both DM the admin and set a non-zero exit code;
+  if no target is set it logs locally only. ⚠️ *Confirm the Discord **DM target**
+  syntax on the host* (likely `user:<your-discord-user-id>`); the script is
+  target-agnostic, so set the right value at deploy.
+- **Agent at fire time (OpenClaw):** this is the real channel-leak risk — a cron
+  wakes the agent, a tool errors, and the agent's `--announce` text could post an
+  error into the channel. Two guards:
+  1. **Persona boundary** in every `SOUL.md`: *if you can't get the data or something
+     goes wrong, do NOT post an error to the channel — stay silent* (in `personas/`).
+  2. ⚠️ **Confirm OpenClaw's failed-run behavior** on the host: does a run that errors
+     still `--announce` to the channel? If so, find how to route run errors to the
+     admin (or suppress the announce on failure) rather than the league channel.
+
+## Delivery verification — test posts (run on the host)
+
+Before trusting the schedule, confirm each channel id routes to the right place.
+One test post per channel; verify each lands where the message says:
+
+```bash
+openclaw message send --channel discord --target channel:1546282433098547280 --message "test -> should be #reminders"
+openclaw message send --channel discord --target channel:1546281412640899084 --message "test -> should be #2026-season"
+openclaw message send --channel discord --target channel:1546285952606011433 --message "test -> should be #stickers"
+```
