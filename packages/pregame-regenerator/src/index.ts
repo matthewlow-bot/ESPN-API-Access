@@ -119,6 +119,11 @@ function addArgs(post: PlannedPost, opts: Options): string[] {
     "add",
     "--at",
     post.at,
+    // Prompt must be an explicit --message payload: with --at set, a bare positional
+    // is treated as the job name, and the gateway rejects it ("Choose exactly one
+    // payload: --system-event, --message, --command, or --script"). Verified on the
+    // live gateway 2026-09-10.
+    "--message",
     PREGAME_PROMPT,
     "--name",
     post.name,
