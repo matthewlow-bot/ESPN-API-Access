@@ -2,8 +2,12 @@
 
 Operational record of the cron jobs / triggers configured on the OpenClaw host.
 These are **OpenClaw config, not code in this repo** (see `002-Specs.md` for the
-ownership split). Recorded here so the finalized commands and their open checks
-aren't lost.
+ownership split).
+
+> **Status: DEPLOYED & LIVE (2026-09-10).** All jobs below run on the gateway as the
+> dedicated **`commish`** agent (`--agent commish --account ffbot`), delivering via
+> `--announce`. Verified end-to-end (a live test posted to `#reminders` as
+> commish/ffbot). The commands here are the deployed shapes.
 
 ## Discord channel registry
 
@@ -17,20 +21,24 @@ Delivery targets (channel IDs are identifiers, not secrets — safe to record):
 
 ## Persona
 
-**One bot agent, swappable persona** — not one agent per persona. A persona is a
-`SOUL.md` file (tone, humor, boundaries) loaded at session start; OpenClaw's
-**`agent:bootstrap` hook** can swap which persona file is injected, so the single
-agent can change voices.
+**Dedicated `commish` agent, symlinked persona (DEPLOYED).** The bot runs as its own
+`commish` agent (🏈 Commish; isolated workspace; model claude-sonnet-5; `Discord
+ffbot → commish` routing, separate from personal `main`/Clawbert — the leak-safe
+split). Its `SOUL.md` is a **symlink** to this repo's persona file:
+
+```
+commish/workspace/SOUL.md -> <repo>/personas/guillermo.md
+```
 
 - **Current persona: Guillermo De La Cruz** (WWDITS familiar — anxious, deferential,
-  loyal). Its `SOUL.md` is the active one.
-- Persona is a property of the **agent**, applied globally — **not set per
-  automation.** So the commands below carry **no persona flag**; whatever `SOUL.md`
-  is active is the voice. (They target the bot agent via `--session`; add `--agent
-  <bot>` only if the bot isn't the default agent on the gateway.)
-- **Switching personas** = the `agent:bootstrap` hook selecting a different `SOUL.md`.
-  The *swap mechanism* is OpenClaw-native; what *drives* the pick (manual / scheduled
-  / league vote) is still unspecified — see `002-Specs.md` open items.
+  loyal). `git pull` updates the voice; **swapping personas = re-point the symlink +
+  reload** (OpenClaw reads `SOUL.md`'s contents, so the symlink resolves transparently
+  — there's no `soulPath`/`@import`, so the symlink IS the mechanism).
+- Persona is a property of the **agent**, applied globally — not set in the prompt.
+  Jobs run **`--agent commish --account ffbot`** so they execute in commish's isolated
+  context and deliver out the ffbot Discord identity (not personal `main`).
+- Programmatic persona rotation (scheduled / league vote via an `agent:bootstrap`
+  hook) is optional and unbuilt — not needed for manual swaps. See `002-Specs.md`.
 - **Tone lives here, not in prompts.** Attitude decisions — e.g. **roasting** the
   week's losers — belong in the active `SOUL.md`, so every post carries them
   consistently. Automation prompts supply only *content / targets* (what data to
@@ -46,16 +54,21 @@ agent can change voices.
 
 Run on the OpenClaw host:
 
+Deployed command (cron message is positional — that's fine for cron jobs; only
+`--at` one-shots need `--message`, see the regenerator):
+
 ```bash
 openclaw automations add "0 17 * * 2" \
   "Post a waiver-wire reminder to the league. Waivers process early Wednesday morning ET, so tonight (Tuesday) is the last chance to set this week's claims. Reminder/nag tone." \
   --name "Waiver Reminder" \
   --tz America/Los_Angeles \
-  --session main \
-  --announce --channel discord --to "channel:1546282433098547280"
+  --agent commish --account ffbot \
+  --announce --channel discord --to "channel:1546282433098547280" \
+  --best-effort-deliver
 ```
 
-Manage: `openclaw automations list` / `openclaw automations remove <job-id>`.
+Manage: `openclaw automations list` / `openclaw automations rm <job-id>` (the verb
+is `rm`, not `remove`).
 
 ### Open checks (verify before trusting)
 - ~~**Proactive firing**~~ ✅ **handled by the OpenClaw cron skill** — the skill
@@ -115,25 +128,30 @@ script; see below). The pipeline:
 5. **Drop past targets.** Skip any target ≤ now (guards reruns / edge cases).
 6. **Idempotency — clear the old set first.** Jobs are named deterministically
    (`Pre-Game Post <YYYY-MM-DD>`). Before creating, remove any existing job with that
-   name so a re-run before firing doesn't double-post. ⚠️ *Depends on the exact
-   `openclaw automations list`/`remove` interface — confirm host-side.*
-7. **Create one-shot jobs.** For each target:
+   name so a re-run before firing doesn't double-post. Uses `automations list --json`
+   (shape `{jobs:[{id,name}]}`) + `automations rm <id>` — both confirmed live.
+7. **Create one-shot jobs.** For each target (note: with `--at`, the prompt MUST be an
+   explicit `--message` — a bare positional is treated as the job name and rejected):
    ```bash
    openclaw automations add --at "<ISO-8601-UTC>" \
-     "First games kick off in ~1 hour. Post to the league: (1) a lineup-lock reminder to set lineups now, then (2) a little pre-game hype previewing this week's matchups — pull the matchups with espn_get_matchups." \
+     --message "First games kick off in ~1 hour. Post to the league: (1) a lineup-lock reminder to set lineups now, then (2) a little pre-game hype previewing this week's matchups — pull the matchups with espn_get_matchups." \
      --name "Pre-Game Post <YYYY-MM-DD>" \
-     --announce --channel discord --to "channel:1546282433098547280"
+     --agent commish --account ffbot \
+     --announce --channel discord --to "channel:1546282433098547280" \
+     --best-effort-deliver
    ```
 8. **Log the plan.** Print what was (or would be) scheduled — the debugging lifeline.
 
 One-shots fire once and self-clean; next week's run creates the new set. Kickoffs
 are UTC and `--at` takes ISO-UTC, so no timezone math on the job itself.
 
-**Regenerator = our-logic + OpenClaw-calls.** Steps 2–5 are ours (pure, in the
-package); steps 6–7 shell out to `openclaw automations`. So it's a host script, not
-a pure OpenClaw automation — unless the gateway lets an agent create other
-automations (unconfirmed). The script **defaults to a dry-run** (prints the plan);
-`--apply` actually creates the jobs.
+**Deployed invocation (2026-09-10):** the regenerator runs as an **OpenClaw automation
+with a `--command` shell payload** — a weekly cron (`0 8 * * 2` America/Los_Angeles,
+Tue 8am PT) that runs `node .../pregame-regenerator/dist/index.js --apply` directly.
+**`delivery: none`** on this job — its stdout must NOT post anywhere; the actual posts
+come only from the one-shot jobs it creates. (Chosen over a host crontab, which the
+gateway container can't reach, and over an agent-prompt shell-out, which adds an LLM
+step that could vary.) The script defaults to a dry-run; `--apply` creates the jobs.
 
 ### NFL-schedule source (reusable component — build once)
 Kickoff times are needed by **Game Reminders**, and also by **Pre-Game Hype**
@@ -154,22 +172,22 @@ must set `--announce --channel discord --to "channel:1546282433098547280"` on ev
 `--at` job it creates (as in the command above). This is the destination — don't
 lose it when the posting code is written.
 
-### Status / to confirm
-- ✅ **Regenerator built** — `packages/pregame-regenerator` (dry-run by default,
-  `--apply` to create jobs). Its dry-run ran against **live ESPN** (2026-09-09) and
-  produced a correct plan: 16 games → 3 future posts (Thu/Sun/Mon), 1h-before-first
-  fire times, past game day correctly dropped.
-- ✅ **Schedule parsing validated on live data** — team abbrevs 0/16 missing, kickoff
-  dates and per-day grouping correct. `seasontype=2` / `competitions[0]` assumptions
-  hold. (The client's `fetch` reaches ESPN even though `curl`/WebFetch were edge-403'd.)
-- ⬜ **Idempotency (`clearExisting`)** — assumes `openclaw automations list --json`
-  returns objects with `name`+`id`; unconfirmed. Fails open (logs + skips) if the
-  shape differs. Confirm the real list/remove interface on the host.
-- ⬜ **`--apply` on the host** — confirm `openclaw automations add --at ...` creates
-  jobs as expected (can't run `openclaw` from this box).
-- ⬜ **Which week** ESPN returns on the regenerator's run day — the live run returned
-  upcoming games with the past day filtered, which is the desired shape; eyeball once
-  on the real cron day to be sure it's the intended week (pass `--week`/`--year` if not).
+### Status — DEPLOYED & verified (2026-09-10)
+- ✅ **Regenerator built + deployed** — `packages/pregame-regenerator`, running as the
+  weekly `--command` automation above. `--apply` run live created this week's one-shots.
+- ✅ **Schedule parsing validated on live data** — team abbrevs 0/16 missing; kickoff
+  dates + per-day grouping correct; `seasontype=2` / `competitions[0]` hold. (The
+  client's `fetch` reaches ESPN even though `curl`/WebFetch were edge-403'd.)
+- ✅ **Idempotency** — `automations list --json` is `{jobs:[{id,name}]}`; removal is
+  `automations rm <id>` — both confirmed and wired.
+- ✅ **`--apply` on the host** — creates jobs; `--at` requires the prompt via `--message`
+  (a positional is rejected: "Choose exactly one payload"). Fixed in the regenerator
+  (commit 2977c9b).
+- ✅ **Delivery** — via `--announce` as commish/ffbot; verified live.
+- ⬜ **Which week** ESPN returns on the Tuesday run — live runs looked right (upcoming
+  games, past day dropped); eyeball once on a real cron day (pass `--week`/`--year` if off).
+- **Build note:** the host needs `COREPACK_HOME=$HOME/.cache/corepack` for
+  `corepack pnpm -r build` (default cache dir is root-owned in the container).
 
 ## Weekly Summary v1 (Event 4 — clock-driven)
 
@@ -188,9 +206,15 @@ openclaw automations add "0 9 * * 2" \
   "Post the weekly fantasy recap for the league. Use the espn_* tools to get real data for the week that just finished: final scores and head-to-head results (espn_get_scoreboard / espn_get_matchups), the updated standings (espn_get_standings), and notable roster moves — waiver adds/drops and trades (espn_get_transactions). Write a recap covering: who won and lost and by how much, any blowouts or nail-biters, standings shake-ups (who climbed/fell), and the week's notable transactions. Single out roast-worthy targets from the data: the week's lowest-scoring team, the biggest blowout (name who got blown out), and the narrowest escape. Use only the league's actual data — do not invent players, scores, or stats." \
   --name "Weekly Summary" \
   --tz America/Los_Angeles \
-  --session main \
-  --announce --channel discord --to "channel:1546281412640899084"
+  --agent commish --account ffbot \
+  --announce --channel discord --to "channel:1546281412640899084" \
+  --best-effort-deliver
 ```
+
+Deployment note: on the gateway, commish sources the recap data via a script in its
+own workspace (`ff-recap-data.mjs`) rather than calling each `espn_*` tool inline —
+same data (scores/standings/transactions), just pre-fetched. Functionally equivalent
+to the prompt above.
 
 The prompt supplies roast *targets* (lowest scorer, biggest blowout, narrowest
 win); the roasting *voice* is a Guillermo `SOUL.md` trait (see Persona) — not in

@@ -1,5 +1,13 @@
 # 002 — Bot Events & Trigger Specs
 
+> **Status: LIVE (deployed 2026-09-10).** Running on OpenClaw as a dedicated
+> **`commish`** agent (isolated workspace, model claude-sonnet-5, `Discord ffbot →
+> commish` routing, kept separate from personal `main`/Clawbert). Persona =
+> `SOUL.md` symlinked to `personas/guillermo.md`. Delivery is via OpenClaw's
+> `--announce` (the gateway posts each job's final text; no send tool bound in the
+> agent). Live jobs: Waiver Reminder, Weekly Summary, Pregame Regenerator (+ the
+> one-shot Pre-Game Posts it creates). Wiring details in `003-Automations.md`.
+
 ## Purpose
 This spec defines the distinct post-worthy events for the fantasy football Discord bot, and — for each — separates out its **trigger mechanism**, **content**, and **delivery** so these can be built and modified independently.
 
@@ -12,7 +20,7 @@ This splits every capability in the spec into one of two owners:
 - **OpenClaw owns** (configuration + agent layer, not code we write):
   - **Delivery** — posting to Discord, which channel, formatting, ping behavior (channel config: allowlists, `requireMention`, thread isolation)
   - **Message-driven reaction** — listening to channel activity and deciding whether to respond (native chat-gateway behavior)
-  - **Persona / voice** — the content's *tone* comes from the bot agent's persona. **Architecture: a single bot agent with a swappable persona** (not one agent per persona). A persona is a `SOUL.md` file (tone, humor, boundaries), and the active one is selected at startup via OpenClaw's `agent:bootstrap` hook, which can swap `SOUL.md` for an alternate persona file. **Current persona: Guillermo De La Cruz** (the anxious, deferential, loyal familiar from *What We Do in the Shadows*). See `003-Automations.md`.
+  - **Persona / voice** — the content's *tone* comes from the bot agent's persona. **Deployed as a dedicated `commish` agent** (🏈 Commish; isolated workspace; model claude-sonnet-5; `Discord ffbot → commish` routing, separate from personal `main`/Clawbert — the leak-safe split). Its persona is a `SOUL.md` **symlinked to this repo's `personas/guillermo.md`** — so `git pull` updates the voice, and swapping personas = re-point the symlink. (OpenClaw reads `SOUL.md`'s file contents; there's no `soulPath`/`@import`, so a symlink is the mechanism.) **Current persona: Guillermo De La Cruz** (WWDITS familiar). See `003-Automations.md`.
 - **We build** (MCP tools OpenClaw's agent invokes):
   - **Data access** — ESPN league data (`espn-mcp-server`, done); an **NFL-schedule source** (ESPN public scoreboard API — reusable across Game Reminders, Pre-Game Hype, Weekly Summary; specced in `003-Automations.md`); and later a live NFL in-game stats source (for smack talk)
   - **Event-object layer** — normalized events merged from those sources (see Data Layer below)
@@ -110,5 +118,5 @@ The agent's persona/content logic should only ever consume these normalized even
 - Live NFL-stats MCP source not yet built
 - Event-object merge layer (`discord-bot-data-sources.md`) not yet written
 - Conversational join-in "should I respond" filter — decide whether OpenClaw's native controls suffice before speccing custom logic
-- Persona: **architecture decided + manual swap specced** — single bot agent, swappable `SOUL.md`; **current persona = Guillermo De La Cruz**. Version-controlled roster in `personas/` (one file per character; `personas/guillermo.md` + `personas/README.md`). **Manual swap (mid-season or next season):** install the chosen file as the agent's `SOUL.md` + reload the session — no cron/prompt changes, since tone lives in `SOUL.md` and prompts are content-only. Still open: **programmatic** selection only (scheduled rotation or a league vote) — needs the `agent:bootstrap` hook to pick the file automatically; not needed for manual switches.
+- Persona: **DEPLOYED (2026-09-10)** — dedicated `commish` agent; `SOUL.md` **symlinked** to `personas/guillermo.md` (verified loading live). `git pull` updates the voice; manual swap (mid-season / next season) = re-point the symlink + reload — no cron/prompt changes, since tone lives in `SOUL.md` and prompts are content-only. Version-controlled roster in `personas/` (`guillermo.md` + `README.md`). Still open (optional): **programmatic** persona rotation (scheduled or a league vote) via an `agent:bootstrap` hook — not needed for manual swaps.
 - Sticker Maker (Event 6): built in OpenClaw + OpenRouter (not this repo); plumbing resolved. **Blocking open item: define a single fixed sticker STYLE** (art style, finish, composition, size, negative prompt) so output is consistent — undefined for now; not buildable until chosen.
