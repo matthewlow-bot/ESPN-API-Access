@@ -38,6 +38,10 @@ interface Options {
   tz: string;
   leadMinutes: number;
   channel: string;
+  /** OpenClaw agent that owns/runs the job (the dedicated FF agent, "commish"). */
+  agent: string;
+  /** Discord account/identity delivery goes out as (the "ffbot" account). */
+  account: string;
   week?: number;
   year?: number;
   /** Where failures are reported (a DM target) — NEVER a league channel. */
@@ -52,6 +56,8 @@ function parseOptions(argv: string[]): Options {
       tz: { type: "string", default: DEFAULT_SCHEDULE_TZ },
       "lead-minutes": { type: "string", default: "60" },
       channel: { type: "string", default: REMINDERS_CHANNEL_ID },
+      agent: { type: "string", default: "commish" },
+      account: { type: "string", default: "ffbot" },
       week: { type: "string" },
       year: { type: "string" },
       "error-target": { type: "string" },
@@ -64,6 +70,8 @@ function parseOptions(argv: string[]): Options {
     tz: String(values.tz),
     leadMinutes: Number(values["lead-minutes"]),
     channel: String(values.channel),
+    agent: String(values.agent),
+    account: String(values.account),
     week: num(values.week as string | undefined),
     year: num(values.year as string | undefined),
     // DM target for failure reports. Config at deploy (env or flag); never a league channel.
@@ -105,7 +113,7 @@ function planPosts(
 }
 
 /** Build the argv for `openclaw automations add` for one post. */
-function addArgs(post: PlannedPost, channel: string): string[] {
+function addArgs(post: PlannedPost, opts: Options): string[] {
   return [
     "automations",
     "add",
@@ -114,11 +122,20 @@ function addArgs(post: PlannedPost, channel: string): string[] {
     PREGAME_PROMPT,
     "--name",
     post.name,
+    // Run as the dedicated FF agent and deliver out the ffbot Discord identity —
+    // NOT main/personal Clawbert. Without --agent an --at job defaults to its creator.
+    "--agent",
+    opts.agent,
+    "--account",
+    opts.account,
     "--announce",
     "--channel",
     "discord",
     "--to",
-    `channel:${channel}`,
+    `channel:${opts.channel}`,
+    // Don't hard-fail / retry-spam if a single delivery fails (pairs with the
+    // persona's "stay silent on failure" boundary — errors never reach the channel).
+    "--best-effort-deliver",
   ];
 }
 
@@ -133,10 +150,10 @@ function runOpenclaw(args: string[]): { ok: boolean; output: string } {
  * Step 6 (idempotency): best-effort removal of an existing job with this name so
  * a re-run before the job fires doesn't double-post.
  *
- * TODO(host): the exact list/remove interface is unconfirmed. This tries
- * `openclaw automations list --json`, expects an array of objects carrying a
- * name/id, and removes matches by id. If the output shape differs, it logs and
- * skips (fail-open) rather than guessing wrong — confirm on the gateway and adjust.
+ * Removal uses `openclaw automations rm <id>` (Clawbert confirmed the verb is `rm`,
+ * not `remove`). The `automations list --json` shape is still being confirmed on the
+ * gateway; this expects an array of objects carrying a name/id. If the output shape
+ * differs, it logs and skips (fail-open) rather than guessing wrong.
  */
 function clearExisting(name: string): void {
   const listed = runOpenclaw(["automations", "list", "--json"]);
@@ -145,18 +162,26 @@ function clearExisting(name: string): void {
     return;
   }
   let jobs: Array<Record<string, unknown>>;
+  let hasMore = false;
   try {
     const parsed = JSON.parse(listed.output);
-    jobs = Array.isArray(parsed) ? parsed : (parsed?.automations ?? parsed?.jobs ?? []);
+    // Confirmed shape (Clawbert): { jobs: [...], hasMore, nextOffset }; items carry id + name.
+    jobs = Array.isArray(parsed) ? parsed : (parsed?.jobs ?? []);
+    hasMore = Boolean(parsed?.hasMore);
   } catch {
     console.warn("  ! `automations list --json` was not JSON as expected; skipping clear (confirm host interface)");
     return;
   }
+  if (hasMore) {
+    // TODO(host): confirm the limit/offset flags and page through; for now dedupe
+    // only sees the first page (fine while FF jobs are few).
+    console.warn("  ! automations list is paginated (hasMore=true) — dedupe only saw the first page");
+  }
   for (const job of jobs) {
     if (job?.name !== name) continue;
-    const id = (job.id ?? job.jobId ?? job.uuid) as string | undefined;
+    const id = job.id as string | undefined;
     if (!id) continue;
-    const removed = runOpenclaw(["automations", "remove", id]);
+    const removed = runOpenclaw(["automations", "rm", id]);
     console.log(`  - removed existing "${name}" (${id})${removed.ok ? "" : ` [warn: ${removed.output}]`}`);
   }
 }
@@ -204,7 +229,7 @@ async function run(opts: Options): Promise<void> {
     console.log(`  • ${post.name}: fire ${post.at}  (first kickoff ${post.firstKickoff}, ${post.gameCount} game(s))`);
     if (opts.apply) {
       clearExisting(post.name); // step 6
-      const created = runOpenclaw(addArgs(post, opts.channel)); // step 7
+      const created = runOpenclaw(addArgs(post, opts)); // step 7
       if (created.ok) {
         console.log("    created");
       } else {
@@ -212,7 +237,7 @@ async function run(opts: Options): Promise<void> {
         failures.push(`${post.name}: ${created.output}`);
       }
     } else {
-      console.log(`    would run: openclaw ${addArgs(post, opts.channel).map((a) => (a.includes(" ") ? JSON.stringify(a) : a)).join(" ")}`);
+      console.log(`    would run: openclaw ${addArgs(post, opts).map((a) => (a.includes(" ") ? JSON.stringify(a) : a)).join(" ")}`);
     }
   }
 
